@@ -83,8 +83,6 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
 
     public function update(User $user, array $data): ?\Throwable
     {
-
-
         $em = $this->getEntityManager();
         $em->beginTransaction();
         try{

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Entity\ProductStatus;
 use App\Entity\User;
-use App\Repository\UserRepository;
 use App\Provider\ResponseProvider;
-use App\Validator\Components\User\UserAddComponent;
+use App\Repository\ProductCategoryRepository;
+use App\Repository\ProductStatusRepository;
+use App\Validator\Components\ProductStatus\ProductStatusAddComponent;
+use App\Validator\Components\ProductStatus\ProductStatusSidComponent;
 use App\Validator\Components\User\UserSidComponent;
 use App\Validator\Components\User\UserUpdateComponent;
 use App\Validator\Validator;
@@ -16,27 +19,20 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/api/user', name: 'api_user_')]
-class UserController extends AbstractMainController
+#[Route('/api/product-status', name: 'api_product-status_')]
+class ProductStatusController extends AbstractMainController
 {
     public function __construct(
-        private UserRepository $userRepository,
-        private readonly Validator $validator,
+        private ProductStatusRepository $productStatusRepository,
+        private readonly Validator      $validator, private readonly ProductCategoryRepository $productCategoryRepository,
     )
     {}
-
-    #[Route('/user')]
-    public function index(): Response
-    {
-        return $this->render('user/index.html.twig');
-    }
 
     #[Route('/{sid}', name: 'get-single', methods: ['GET'])]
     public function getSingle(Request $request): JsonResponse
     {
         $sid = $request->get('sid');
-        $checkSid = new UserSidComponent(['sid' => $sid]);
-
+        $checkSid = new ProductStatusSidComponent(['sid' => $sid]);
         $errors = $this->validator->valid($checkSid);
 
         if([] !== $errors) {
@@ -48,30 +44,30 @@ class UserController extends AbstractMainController
             ));
         }
 
-        $user = $this->userRepository->getSingle($sid);
-        if(null === $user){
+        $productStatus = $this->productStatusRepository->getSingle($sid);
+        if(null === $productStatus){
             return $this->json(new ResponseProvider(
                 status: Response::HTTP_NOT_FOUND,
-                message: 'User not found.'
+                message: 'Product status not found.'
             ));
         }
 
         return $this->json(new ResponseProvider(
             status: Response::HTTP_OK,
-            message: 'User found.',
-            data: ['user' => $user],
+            message: 'Product status found.',
+            data: ['product-status' => $productStatus],
         ));
     }
 
     #[Route('/', name: 'get-all', methods: ['GET'])]
     public function getAll(Request $request): JsonResponse
     {
-        $users = $this->userRepository->getAll((int)$request->get('offset', 0), (int)$request->get('limit', 10));
+        $productStatus = $this->productStatusRepository->getAll((int)$request->get('offset', 0), (int)$request->get('limit', 10));
 
         return $this->json(new ResponseProvider(
             status: Response::HTTP_OK,
-            message: 'User found.',
-            data: ['users' => $users],
+            message: 'Product status found.',
+            data: ['product-status' => $productStatus],
         ));
     }
 
@@ -88,7 +84,7 @@ class UserController extends AbstractMainController
             ));
         }
 
-        $checkData = new UserAddComponent($data);
+        $checkData = new ProductStatusAddComponent($data);
         $errors = $this->validator->valid($checkData);
 
         if([] !== $errors) {
@@ -100,40 +96,39 @@ class UserController extends AbstractMainController
             ));
         }
 
-        $user = $this->userRepository->findOneBy(['email' => $data['email']]);
-        if(true === $user instanceof User){
-            //return $this->json(data: 'user exist', status: Response::HTTP_CONFLICT);
+        $exist = $this->productStatusRepository->findOneBy(['name' => $data['name']]);
+        if(true === $exist instanceof ProductStatus){
             return $this->json(new ResponseProvider(
                 status: Response::HTTP_CONFLICT,
-                message: 'User exists',
+                message: 'Name exist in database',
                 data: null,
-                errors:['User exist in database'],
+                errors: ['Name exist in database']
             ));
         }
 
-        $result = $this->userRepository->add($data);
-        if(null !== $result){
+        $result = $this->productStatusRepository->add($data);
+        if(true === $result instanceof \Throwable){
             return $this->json(new ResponseProvider(
                 status: Response::HTTP_CONFLICT,
-                message: 'Something went wrong with saving data',
+                message: 'Something went wrong with adding product status',
                 data: null,
-                errors: [$result],
+                errors: [$result->getMessage()],
             ));
         }
 
         return $this->json(new ResponseProvider(
             status: Response::HTTP_OK,
-            message: 'User added successfully'
+            message: 'Product Status added successfully'
         ));
     }
 
     #[Route('/{sid}', name: 'update', methods: ['PATCH'])]
-    public function updatePart(Request $request): JsonResponse
+    public function update(Request $request): JsonResponse
     {
         $sid = $request->get('sid');
-        $checkSid = new UserSidComponent(['sid' => $sid]);
-
+        $checkSid = new ProductStatusSidComponent(['sid' => $sid]);
         $errors = $this->validator->valid($checkSid);
+
         if([] !== $errors) {
             return $this->json(new ResponseProvider(
                 status: Response::HTTP_CONFLICT,
@@ -153,7 +148,7 @@ class UserController extends AbstractMainController
             ));
         }
 
-        $checkData = new UserUpdateComponent($data);
+        $checkData = new ProductStatusAddComponent($data);
         $errors = $this->validator->valid($checkData);
 
         if([] !== $errors) {
@@ -165,15 +160,7 @@ class UserController extends AbstractMainController
             ));
         }
 
-        $user = $this->userRepository->findOneBy(['sid' => $sid]);
-        if(null === $user instanceof User){
-            return $this->json(new ResponseProvider(
-                status: Response::HTTP_NOT_FOUND,
-                message: 'User not found.'
-            ));
-        }
-
-        $result = $this->userRepository->update($user, $data);
+        $result = $this->productStatusRepository->update($sid, $data);
         if(true === $result instanceof \Throwable){
             return $this->json(new ResponseProvider(
                 status: Response::HTTP_CONFLICT,
@@ -185,15 +172,15 @@ class UserController extends AbstractMainController
 
         return $this->json(new ResponseProvider(
             status: Response::HTTP_OK,
-            message: 'User updated successfully.'
+            message: 'Product status updated successfully.'
         ));
     }
 
     #[Route('/{sid}', name: 'delete', methods: ['DELETE'])]
-    public function remove(Request $request): JsonResponse
+    public function delete(Request $request): JsonResponse
     {
         $sid = $request->get('sid');
-        $checkSid = new UserSidComponent(['sid' => $sid]);
+        $checkSid = new ProductStatusSidComponent(['sid' => $sid]);
 
         $errors = $this->validator->valid($checkSid);
         if([] !== $errors) {
@@ -205,7 +192,7 @@ class UserController extends AbstractMainController
             ));
         }
 
-        $result = $this->userRepository->delete($sid);
+        $result = $this->productStatusRepository->delete($sid);
         if(true === $result instanceof \Throwable){
             return $this->json(new ResponseProvider(
                 status: Response::HTTP_CONFLICT,
@@ -217,7 +204,7 @@ class UserController extends AbstractMainController
 
         return $this->json(new ResponseProvider(
             status: Response::HTTP_OK,
-            message: 'User deleting successfully.'
+            message: 'Product status deleting successfully.'
         ));
     }
 }
